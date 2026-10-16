@@ -47,3 +47,13 @@ export type ProvisionRequestDoc = Omit<ProvisionRequest, "id" | "engineerId"> & 
 };
 
 export type NewProvisionRequestBody = Pick<ProvisionRequest, "workspaceId" | "resourceType" | "status">;
+
+// ProjectWorkspace is the one Session 1 interface whose numeric id we
+// do NOT store in Mongo -- Mongo manages _id. Instead we keep a
+// numeric workspaceId field (101-106) as the identity that
+// ProvisionRequest already references. Omit+intersection produces a
+// mapped type, not a raw interface, so the toJSON transform's
+// Record<string, unknown> parameter type-checks cleanly.
+export type WorkspaceDoc = Omit<ProjectWorkspace, "id"> & {
+  workspaceId: number;
+};
