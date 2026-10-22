@@ -9,6 +9,7 @@ import { connectDB } from "./config/db";
 import { authRouter } from "./routes/auth";
 import { provisionRequestRouter } from "./routes/provisionRequest";
 import { workspaceRouter } from "./routes/workspace";
+import { aiRouter } from "./routes/ai";
 
 // This file builds the app and stops. It never opens a port and never
 // touches the database, so anything that wants an app -- server.ts, or
@@ -61,6 +62,10 @@ app.get("/api/health", (_req: Request, res: Response) => {
 app.use("/api/auth", authRouter);
 app.use("/api/workspaces", workspaceRouter);
 app.use("/api/provision-requests", provisionRequestRouter);
+
+// ===== SESSION 11: one more router, mounted like the other three ====
+// Private, rate limited, and the only route that talks to Gemini.
+app.use("/api/ai", aiRouter);
 
 // 404 Handler
 // Nothing above matched, so the URL does not exist. Without this, an
