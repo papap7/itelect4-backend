@@ -105,6 +105,10 @@ app.use(
 
 // Vercel looks for an Express app in six places, and src/app.ts is one
 // of them. What it needs there is a default export -- that is the
-// whole of the deployment configuration for this project, and it is
-// why there is no vercel.json in this repo.
+// whole of the deployment configuration for this project.
+// Set maximum duration to 60s so Gemini calls (10-25s) do not trigger 504 timeouts.
+export const config = {
+  maxDuration: 60,
+};
+
 export default app;
