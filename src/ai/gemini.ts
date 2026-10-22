@@ -70,11 +70,11 @@ export async function adviseRequest(
       config,
     });
   } catch (err) {
-    // Spikes in demand return 503 on gemini-flash-latest; fallback to lite
-    // ensures user requests don't fail during Google traffic spikes.
+    // Primary model (gemini-2.0-flash-lite) may still hit 503 under load.
+    // Fall back to the experimental flash-lite which has separate capacity.
     if (err instanceof ApiError && err.status === 503) {
       response = await getClient().models.generateContent({
-        model: "gemini-flash-lite-latest",
+        model: "gemini-2.0-flash-lite-001",
         contents,
         config,
       });

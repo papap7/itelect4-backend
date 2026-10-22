@@ -5,7 +5,10 @@ import type { Advisor } from "../schemas/advisor";
 // now and the end of the semester. The cost: the model can change
 // underneath you, so the same prompt may answer a little differently
 // next month.
-export const MODEL = "gemini-flash-latest";
+// gemini-2.0-flash-lite is used instead of the gemini-flash-latest alias
+// because the alias has been returning 503 (high demand) while the concrete
+// model name resolves reliably.
+export const MODEL = "gemini-2.0-flash-lite";
 
 // The system prompt: the instructions that apply to EVERY request,
 // sent separately from what the engineer typed.
