@@ -1,4 +1,4 @@
-import { GoogleGenAI, type Content } from "@google/genai";
+import { GoogleGenAI, ApiError, type Content } from "@google/genai";
 import { MODEL, SYSTEM_PROMPT, EXAMPLES, wrap } from "./prompt";
 import {
   advisorSchema,
@@ -50,20 +50,38 @@ export class AiReplyError extends Error {}
 export async function adviseRequest(
   description: string,
 ): Promise<Advisor> {
-  const response = await getClient().models.generateContent({
-    model: MODEL,
-    contents: buildContents(description),
-    config: {
-      systemInstruction: SYSTEM_PROMPT,
-      // JSON, in exactly this shape. Without these two lines the
-      // reply is prose, and prose cannot be put on a screen field
-      // by field.
-      responseMimeType: "application/json",
-      responseJsonSchema: advisorJsonSchema,
-      // No temperature here, on purpose. Google's guide for the
-      // Gemini 3 models says to leave it at its default of 1.0.
-    },
-  });
+  const contents = buildContents(description);
+  const config = {
+    systemInstruction: SYSTEM_PROMPT,
+    // JSON, in exactly this shape. Without these two lines the
+    // reply is prose, and prose cannot be put on a screen field
+    // by field.
+    responseMimeType: "application/json",
+    responseJsonSchema: advisorJsonSchema,
+    // No temperature here, on purpose. Google's guide for the
+    // Gemini 3 models says to leave it at its default of 1.0.
+  };
+
+  let response;
+  try {
+    response = await getClient().models.generateContent({
+      model: MODEL,
+      contents,
+      config,
+    });
+  } catch (err) {
+    // Spikes in demand return 503 on gemini-flash-latest; fallback to lite
+    // ensures user requests don't fail during Google traffic spikes.
+    if (err instanceof ApiError && err.status === 503) {
+      response = await getClient().models.generateContent({
+        model: "gemini-flash-lite-latest",
+        contents,
+        config,
+      });
+    } else {
+      throw err;
+    }
+  }
 
   // undefined when there is no text at all -- for example a reply
   // that was blocked by Gemini's safety filters.
