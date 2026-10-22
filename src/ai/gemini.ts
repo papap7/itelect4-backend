@@ -70,11 +70,10 @@ export async function adviseRequest(
       config,
     });
   } catch (err) {
-    // Primary model (gemini-2.0-flash-lite) may still hit 503 under load.
-    // Fall back to the experimental flash-lite which has separate capacity.
+    // Primary model may hit 503 under load; fall back to pinned version.
     if (err instanceof ApiError && err.status === 503) {
       response = await getClient().models.generateContent({
-        model: "gemini-2.0-flash-lite-001",
+        model: "gemini-3.5-flash-lite-001",
         contents,
         config,
       });
