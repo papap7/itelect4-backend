@@ -105,10 +105,3 @@ flowchart LR
 - a valid token with a too-short prompt → `400`, so it got past `requireAuth` without reaching Gemini
 
 `.github/workflows/ci.yml` runs `npm run typecheck` and `npm test` on every push, with `JWT_SECRET` from a repository secret. The badge at the top of this file shows the result of the latest run.
-
----
-
-## 🤖 AI Use Disclosure
-
-<!-- TODO (author): list the AI tools you used, what for, and what you wrote or changed yourself. -->
-_To be completed by the author._
