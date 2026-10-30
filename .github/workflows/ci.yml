@@ -1,0 +1,25 @@
+name: CI
+
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # Install exactly the versions pinned in package-lock.json.
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      # JWT_SECRET is stored as a repository secret; there is no .env in CI.
+      - run: npm test
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}

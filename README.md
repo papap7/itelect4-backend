@@ -1,5 +1,7 @@
 # CloudOps Portal — Backend API (ITELECT4 GT4)
 
+[![CI](https://github.com/papap7/itelect4-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/papap7/itelect4-backend/actions/workflows/ci.yml)
+
 RESTful API backend for the CloudOps Provisioning and Workspace Management Portal.
 
 ## 🔗 Live Deployments & Repositories
@@ -11,12 +13,30 @@ RESTful API backend for the CloudOps Provisioning and Workspace Management Porta
 
 ---
 
+## 🏗️ Architecture
+
+```mermaid
+flowchart LR
+  fe["itelect4-project-paulot<br/>React + Vite on Vercel"]
+  be["itelect4-backend<br/>Express on Vercel"]
+  db[("MongoDB Atlas")]
+  ai["Gemini API"]
+  fe -- "fetch + Bearer token" --> be
+  be -- "Mongoose" --> db
+  be -- "GEMINI_API_KEY" --> ai
+```
+
+---
+
 ## 🛠️ Tech Stack
 
 - **Runtime:** Node.js / Express
 - **Language:** TypeScript (Strict mode)
 - **Database:** MongoDB Atlas via Mongoose (Serverless connection promise-caching)
 - **Authentication:** JWT (JSON Web Tokens) & bcryptjs password hashing
+- **AI:** Google Gemini (`@google/genai`) with a Zod-checked reply
+- **Testing:** Vitest + Supertest
+- **CI:** GitHub Actions (type check and tests on every push)
 - **Deployment:** Vercel Serverless Functions
 
 ---
@@ -36,6 +56,7 @@ RESTful API backend for the CloudOps Provisioning and Workspace Management Porta
 - `GET /api/provision-requests/:id` — Fetch request details
 - `PATCH /api/provision-requests/:id` — Update request
 - `DELETE /api/provision-requests/:id` — Delete request
+- `POST /api/ai` — Ask Gemini to review a resource description (`{ prompt }`, 20 to 2000 characters). Rate limited to 5 requests per minute per account
 
 ---
 
@@ -55,6 +76,7 @@ RESTful API backend for the CloudOps Provisioning and Workspace Management Porta
    ```env
    MONGODB_URI=your_mongodb_connection_string
    JWT_SECRET=your_jwt_secret
+   GEMINI_API_KEY=your_gemini_api_key
    PORT=4000
    CORS_ORIGIN=http://localhost:5173
    ```
@@ -66,3 +88,20 @@ RESTful API backend for the CloudOps Provisioning and Workspace Management Porta
    ```bash
    npm run dev
    ```
+6. **Run the tests:**
+   ```bash
+   npm test
+   ```
+   The tests need no database and no Gemini call: `connectDB` is replaced with `vi.mock`, and the only request that carries a valid token is refused by the request schema before Gemini is reached. They do need `JWT_SECRET`, which they read from `.env` on your laptop and from a GitHub Actions secret in CI.
+
+---
+
+## 🧪 Tests & CI
+
+`tests/ai.test.ts` uses Supertest to send real requests to the real Express app (no port is opened) and checks `POST /api/ai`:
+
+- no token → `401`, "No token. Send Authorization: Bearer <token>"
+- a token signed with another secret → `401`, "Token is invalid or has expired"
+- a valid token with a too-short prompt → `400`, so it got past `requireAuth` without reaching Gemini
+
+`.github/workflows/ci.yml` runs `npm run typecheck` and `npm test` on every push, with `JWT_SECRET` from a repository secret. The badge at the top of this file shows the result of the latest run.
