@@ -1,30 +1,20 @@
-// ===== SESSION 12: a NEW file =========================================
-// One file, one JWT-protected route: POST /api/ai. Supertest sends
-// real HTTP requests to the real Express app, without opening a port.
-
-// Vitest does not read .env into process.env by itself (only server.ts
-// does that, through this same import). So on your laptop this line is
-// what gives tokenFor() its JWT_SECRET. dotenv never overwrites a
-// variable that is already set, so on GitHub the value from the
-// repository secret in ci.yml wins, and there is no .env to find.
+// Vitest does not load .env on its own. Locally this supplies JWT_SECRET;
+// in CI the variable is already set by the workflow, and dotenv does not
+// override existing values.
 import "dotenv/config";
 import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import jwt from "jsonwebtoken";
 import { app } from "../src/app";
 
-// app.ts waits for connectDB() in front of every route, and there is
-// no database here or on GitHub's machine. This replaces the whole
-// src/config/db module, for this test file only, with one whose
-// connectDB does nothing. Vitest moves vi.mock above the imports, so
-// app.ts gets this version even though it is imported first.
+// app.ts awaits connectDB() before every route. Replace the module so the
+// suite runs without MongoDB. vi.mock is hoisted above the imports.
 vi.mock("../src/config/db", () => ({
   connectDB: async () => {},
 }));
 
-// A token made the way POST /api/auth/login makes one: the same
-// payload shape ({ userId }), signed with the same JWT_SECRET. No
-// engineer has to exist, because requireAuth only checks the signature.
+// Signs a token the same way POST /api/auth/login does. requireAuth only
+// verifies the signature, so no matching user record is needed.
 function tokenFor(userId: string): string {
   return jwt.sign({ userId }, process.env.JWT_SECRET!, {
     expiresIn: "5m",
@@ -44,8 +34,6 @@ describe("POST /api/ai", () => {
   });
 
   it("answers 401 when the token was signed with another secret", async () => {
-    // Looks like a real token, but only the server knows the real
-    // JWT_SECRET, so requireAuth's jwt.verify rejects it.
     const forged = jwt.sign({ userId: "someone" }, "not-the-secret");
 
     const res = await request(app)
@@ -58,10 +46,9 @@ describe("POST /api/ai", () => {
   });
 
   it("lets a valid token through, then checks the body", async () => {
-    // "Too short" is 9 characters, so aiRequestSchema refuses it
-    // before adviseRequest() runs -- Gemini is never called, and the
-    // database is never touched. Only the route itself answers 400, so
-    // getting 400 (not 401) proves the token got past requireAuth.
+    // The prompt is below the schema's 20-character minimum, so the route
+    // responds 400 before calling Gemini. A 400 (rather than 401) confirms
+    // the request passed requireAuth.
     const res = await request(app)
       .post("/api/ai")
       .set("Authorization", `Bearer ${tokenFor("test-user")}`)
