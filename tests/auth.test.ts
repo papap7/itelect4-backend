@@ -92,7 +92,10 @@ describe("POST /api/auth/register", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Validation failed");
-    expect(res.body.errors[0]).toMatch(/password.*shorter than the minimum/);
+    expect(res.body.errors).toEqual(["password must be at least 8 characters"]);
+    // Mongoose's default message quoted the value it rejected, which
+    // sent the password back in the response.
+    expect(JSON.stringify(res.body)).not.toContain("short");
     expect(db.docs).toHaveLength(0);
   });
 
@@ -100,7 +103,29 @@ describe("POST /api/auth/register", () => {
     const res = await register({});
 
     expect(res.status).toBe(400);
-    expect(res.body.errors).toHaveLength(3);
+    expect(res.body.errors).toEqual([
+      "name is required",
+      "email is required",
+      "password is required",
+    ]);
+  });
+
+  it("answers 400 when a field is not a string", async () => {
+    const res = await register({ ...ANA, name: 42 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toEqual(["name must be a string"]);
+    expect(db.docs).toHaveLength(0);
+  });
+
+  it("refuses a MongoDB operator in place of the email before any query runs", async () => {
+    const findOne = vi.spyOn(Engineer, "findOne");
+
+    const res = await register({ ...ANA, email: { $ne: null } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toEqual(["email must be a string"]);
+    expect(findOne).not.toHaveBeenCalled();
   });
 });
 
@@ -146,6 +171,33 @@ describe("POST /api/auth/login", () => {
 
     expect(unknownEmail.status).toBe(401);
     expect(unknownEmail.body).toEqual(wrongPassword.body);
+  });
+
+  it("answers 400, not 500, when the password is missing", async () => {
+    // bcrypt.compare(undefined, hash) throws; this used to reach the
+    // error handler as a 500.
+    const res = await login({ email: ANA.email });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Validation failed",
+      errors: ["password is required"],
+    });
+  });
+
+  it("answers 400 when the password is not a string", async () => {
+    const res = await login({ email: ANA.email, password: 12345678 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toEqual(["password must be a string"]);
+  });
+
+  it("refuses a MongoDB operator in place of the email, and issues no token", async () => {
+    // { $ne: null } would match the first engineer in the collection.
+    const res = await login({ email: { $ne: null }, password: ANA.password });
+
+    expect(res.status).toBe(400);
+    expect(res.body).not.toHaveProperty("token");
   });
 
   it("issues a token that the protected routes accept", async () => {
