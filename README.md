@@ -92,16 +92,29 @@ flowchart LR
    ```bash
    npm test
    ```
-   The tests need no database and no Gemini call: `connectDB` is replaced with `vi.mock`, and the only request that carries a valid token is refused by the request schema before Gemini is reached. They do need `JWT_SECRET`, which they read from `.env` on your laptop and from a GitHub Actions secret in CI.
+   The tests need no database and no Gemini key: `connectDB` is replaced with `vi.mock`, MongoDB's driver calls are answered from an in-memory array (`tests/helpers/fakeDb.ts`), and Gemini's client is mocked. They do need `JWT_SECRET`, which they read from `.env` on your laptop and from a GitHub Actions secret in CI.
 
 ---
 
 ## 🧪 Tests & CI
 
-`tests/ai.test.ts` uses Supertest to send real requests to the real Express app (no port is opened) and checks `POST /api/ai`:
+Supertest sends real requests to the real Express app (no port is opened). Only two things are replaced:
 
-- no token → `401`, "No token. Send Authorization: Bearer <token>"
-- a token signed with another secret → `401`, "Token is invalid or has expired"
-- a valid token with a too-short prompt → `400`, so it got past `requireAuth` without reaching Gemini
+- **MongoDB's driver calls.** `tests/helpers/fakeDb.ts` answers `insertOne`, `find`, `findOne`, `updateOne`, `findOneAndUpdate` and `findOneAndDelete` from an in-memory array. Everything above that line is the real code: Mongoose casting, schema validation, the password-hashing hook, `toJSON`, the routes and the middleware.
+- **Gemini's client.** No test spends API quota.
+
+| File | What it checks |
+| --- | --- |
+| `cors-cache.test.ts` | Each frontend domain gets its own `Access-Control-Allow-Origin`; `Vary: Origin`; `Cache-Control: no-store` and no `ETag` on every response; the old-domain → new-domain → old-domain sequence that used to fail; `parseOrigins` |
+| `workspace.test.ts` | Public list sorted 101–106, single workspace, 404, non-numeric id → 400, seed data valid |
+| `auth.test.ts` | Register (201, hashed password, trimmed/lowercased email, role cannot be chosen, 409 duplicate, 400 validation) and login (token payload and 2 h expiry, case-insensitive email, the same 401 for wrong password and unknown email) |
+| `provisionRequest.test.ts` | All five routes need a token; create/list/get/update/delete; each user sees only their own requests; someone else's request is a 404 |
+| `ai.test.ts` | `POST /api/ai`: auth, prompt validation, the 429/502/500 mapping of Gemini errors, and the 5-per-minute-per-account rate limit |
+| `gemini.test.ts` | `adviseRequest`: model, system prompt and schema sent; examples as earlier turns; 503 fallback model; unusable replies → `AiReplyError` |
+| `schemas.test.ts` | Request and reply schemas at their boundaries; every worked example passes the reply schema |
+| `requireAuth.test.ts` | Valid, missing, wrong-scheme, expired, wrong-secret, unsigned (`alg: none`) and edited tokens |
+| `db.test.ts` | `connectDB`: missing URI message, one connection for concurrent callers, retry after a failed attempt |
+| `app.test.ts` | Health check, the connect-before-every-route middleware, JSON 404s, headers on errors |
+| `models.test.ts` | Password never in JSON or default queries, hash only on password change, enums and defaults |
 
 `.github/workflows/ci.yml` runs `npm run typecheck` and `npm test` on every push, with `JWT_SECRET` from a repository secret. The badge at the top of this file shows the result of the latest run.
