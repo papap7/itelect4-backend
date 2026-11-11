@@ -8,7 +8,7 @@ RESTful API backend for the CloudOps Provisioning and Workspace Management Porta
 
 - **Live Backend API:** [https://itelect4-backend-sand.vercel.app](https://itelect4-backend-sand.vercel.app)
 - **Live Frontend App:** [https://cloudops-portal-tenorio.vercel.app](https://cloudops-portal-tenorio.vercel.app) (the earlier address, [itelect4-project-paulot.vercel.app](https://itelect4-project-paulot.vercel.app), still works)
-- **Frontend GitHub Repo:** [https://github.com/papap7/itelect4-project-paulot](https://github.com/papap7/itelect4-project-paulot)
+- **Frontend GitHub Repo:** [https://github.com/papap7/cloudops-portal](https://github.com/papap7/cloudops-portal)
 - **Backend GitHub Repo:** [https://github.com/papap7/itelect4-backend](https://github.com/papap7/itelect4-backend)
 
 ---
