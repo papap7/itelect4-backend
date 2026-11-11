@@ -7,8 +7,8 @@ RESTful API backend for the CloudOps Provisioning and Workspace Management Porta
 ## 🔗 Live Deployments & Repositories
 
 - **Live Backend API:** [https://itelect4-backend-sand.vercel.app](https://itelect4-backend-sand.vercel.app)
-- **Live Frontend App:** [https://itelect4-project-paulot.vercel.app](https://itelect4-project-paulot.vercel.app)
-- **Frontend GitHub Repo:** [https://github.com/papap7/itelect4-project-paulot](https://github.com/papap7/itelect4-project-paulot)
+- **Live Frontend App:** [https://cloudops-portal-tenorio.vercel.app](https://cloudops-portal-tenorio.vercel.app) (the earlier address, [itelect4-project-paulot.vercel.app](https://itelect4-project-paulot.vercel.app), still works)
+- **Frontend GitHub Repo:** [https://github.com/papap7/cloudops-portal](https://github.com/papap7/cloudops-portal)
 - **Backend GitHub Repo:** [https://github.com/papap7/itelect4-backend](https://github.com/papap7/itelect4-backend)
 
 ---
@@ -17,7 +17,7 @@ RESTful API backend for the CloudOps Provisioning and Workspace Management Porta
 
 ```mermaid
 flowchart LR
-  fe["itelect4-project-paulot<br/>React + Vite on Vercel"]
+  fe["cloudops-portal<br/>React + Vite on Vercel"]
   be["itelect4-backend<br/>Express on Vercel"]
   db[("MongoDB Atlas")]
   ai["Gemini API"]
@@ -80,6 +80,7 @@ flowchart LR
    PORT=4000
    CORS_ORIGIN=http://localhost:5173
    ```
+   `CORS_ORIGIN` lists the frontend origins, comma-separated. In production it holds both frontend domains. The frontend's Vercel preview deployments are allowed by a pattern in `src/config/cors.ts` instead, because their URLs change with every push.
 4. **Seed Database:**
    ```bash
    npm run seed
@@ -105,16 +106,16 @@ Supertest sends real requests to the real Express app (no port is opened). Only 
 
 | File | What it checks |
 | --- | --- |
-| `cors-cache.test.ts` | Each frontend domain gets its own `Access-Control-Allow-Origin`; `Vary: Origin`; `Cache-Control: no-store` and no `ETag` on every response; the old-domain → new-domain → old-domain sequence that used to fail; `parseOrigins` |
+| `cors-cache.test.ts` | Each frontend domain gets its own `Access-Control-Allow-Origin`; `Vary: Origin`; `Cache-Control: no-store` and no `ETag` on every response; the old-domain → new-domain → old-domain sequence that used to fail; `parseOrigins`; preview deployment URLs allowed, look-alikes refused |
 | `workspace.test.ts` | Public list sorted 101–106, single workspace, 404, non-numeric id → 400, seed data valid |
-| `auth.test.ts` | Register (201, hashed password, trimmed/lowercased email, role cannot be chosen, 409 duplicate, 400 validation) and login (token payload and 2 h expiry, case-insensitive email, the same 401 for wrong password and unknown email) |
-| `provisionRequest.test.ts` | All five routes need a token; create/list/get/update/delete; each user sees only their own requests; someone else's request is a 404 |
+| `auth.test.ts` | Register (201, hashed password, trimmed/lowercased email, role cannot be chosen, 409 duplicate, 400 validation without echoing the password) and login (token payload and 2 h expiry, case-insensitive email, the same 401 for wrong password and unknown email, 400 for a missing or non-string field); a MongoDB operator in place of the email is refused before any query |
+| `provisionRequest.test.ts` | All five routes need a token; create/list/get/update/delete; each user sees only their own requests; someone else's request is a 404; only `workspaceId`, `resourceType` and `status` can be set (not `engineerId` or `requestedAt`); a workspace that does not exist is a 400 |
 | `ai.test.ts` | `POST /api/ai`: auth, prompt validation, the 429/502/500 mapping of Gemini errors, and the 5-per-minute-per-account rate limit |
 | `gemini.test.ts` | `adviseRequest`: model, system prompt and schema sent; examples as earlier turns; 503 fallback model; unusable replies → `AiReplyError` |
 | `schemas.test.ts` | Request and reply schemas at their boundaries; every worked example passes the reply schema |
 | `requireAuth.test.ts` | Valid, missing, wrong-scheme, expired, wrong-secret, unsigned (`alg: none`) and edited tokens |
 | `db.test.ts` | `connectDB`: missing URI message, one connection for concurrent callers, retry after a failed attempt |
-| `app.test.ts` | Health check, the connect-before-every-route middleware, JSON 404s, headers on errors |
+| `app.test.ts` | Health check, the connect-before-every-route middleware, JSON 404s, headers on errors, broken JSON → 400 and an oversized body → 413 instead of 500 |
 | `models.test.ts` | Password never in JSON or default queries, hash only on password change, enums and defaults |
 
 `.github/workflows/ci.yml` runs `npm run typecheck` and `npm test` on every push, with `JWT_SECRET` from a repository secret. The badge at the top of this file shows the result of the latest run.

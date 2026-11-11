@@ -93,3 +93,38 @@ describe("headers on every response", () => {
     }
   });
 });
+
+describe("a request body express.json() cannot read", () => {
+  it("answers broken JSON with 400, not 500, and logs nothing", async () => {
+    const res = await request(app)
+      .post("/api/auth/login")
+      .set("Content-Type", "application/json")
+      .send('{"email": "ana@cloudops.test",');
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "The request body is not valid JSON" });
+    // A 500 is logged as a bug in this app; a client's broken JSON is not one.
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it("answers a body over express.json()'s 100 kB limit with 413", async () => {
+    const res = await request(app)
+      .post("/api/auth/login")
+      .set("Content-Type", "application/json")
+      .send(JSON.stringify({ email: "x".repeat(200_000) }));
+
+    expect(res.status).toBe(413);
+    expect(res.body).toEqual({ message: "The request body is too large" });
+  });
+
+  it("still sends the CORS and no-store headers on that 400", async () => {
+    const res = await request(app)
+      .post("/api/auth/login")
+      .set("Origin", "http://localhost:5173")
+      .set("Content-Type", "application/json")
+      .send("{");
+
+    expect(res.status).toBe(400);
+    expect(res.headers["cache-control"]).toBe("no-store");
+  });
+});

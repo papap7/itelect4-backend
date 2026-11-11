@@ -6,7 +6,7 @@ import express, {
 import cors from "cors";
 import mongoose from "mongoose";
 import { connectDB } from "./config/db";
-import { parseOrigins } from "./config/cors";
+import { allowedOrigins } from "./config/cors";
 import { authRouter } from "./routes/auth";
 import { provisionRequestRouter } from "./routes/provisionRequest";
 import { workspaceRouter } from "./routes/workspace";
@@ -27,8 +27,9 @@ export const app = express();
 
 // One environment variable, comma-separated, so the list is different
 // on your laptop and on Vercel without the code knowing which it is.
-// The parsing lives in config/cors.ts so it can be tested on its own.
-const ALLOWED_ORIGINS = parseOrigins(process.env.CORS_ORIGIN);
+// The parsing lives in config/cors.ts so it can be tested on its own,
+// next to the patterns for the frontend's Vercel preview deployments.
+const ALLOWED_ORIGINS = allowedOrigins(process.env.CORS_ORIGIN);
 
 app.use(cors({ origin: ALLOWED_ORIGINS }));
 
@@ -115,6 +116,25 @@ app.use(
     if (err instanceof mongoose.Error.CastError) {
       res.status(400).json({
         message: `"${err.value}" is not a valid id`,
+      });
+      return;
+    }
+
+    // express.json() reports a body it cannot read by throwing an error
+    // that already carries a 4xx status: 400 for broken JSON, 413 for a
+    // body over the size limit. Those are the client's mistake, so keep
+    // the status instead of turning them into a 500 -- which also kept
+    // them out of the error log, where a 500 means "bug in this app".
+    const status = (err as { status?: unknown }).status;
+    if (typeof status === "number" && status >= 400 && status < 500) {
+      const type = (err as { type?: unknown }).type;
+      res.status(status).json({
+        message:
+          type === "entity.parse.failed"
+            ? "The request body is not valid JSON"
+            : type === "entity.too.large"
+              ? "The request body is too large"
+              : "Bad request",
       });
       return;
     }

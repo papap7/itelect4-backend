@@ -18,7 +18,15 @@ const engineerSchema = new Schema<EngineerDoc>(
       default: EngineerRole.Developer,
     },
     isActive: { type: Boolean, default: true },
-    password: { type: String, required: true, minlength: 8, select: false },
+    // A custom message, because Mongoose's default one quotes the value:
+    // "Path `password` (`short`) is shorter than ..." -- which sent the
+    // rejected password back in the 400 response.
+    password: {
+      type: String,
+      required: true,
+      minlength: [8, "password must be at least 8 characters"],
+      select: false,
+    },
   },
   { timestamps: true }
 );

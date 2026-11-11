@@ -3,27 +3,21 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { Engineer } from "../models/Engineer";
 import type { TokenPayload } from "../middleware/auth";
+import { registerSchema, loginSchema, validationErrors } from "../schemas/auth";
 
 export const authRouter = Router();
 
-interface RegisterBody {
-  name: string;
-  email: string;
-  password: string;
-}
-
-interface LoginBody {
-  email: string;
-  password: string;
-}
-
 authRouter.post(
   "/register",
-  async (
-    req: Request<unknown, unknown, RegisterBody>,
-    res: Response,
-  ) => {
-    const { name, email, password } = req.body;
+  async (req: Request, res: Response) => {
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json(validationErrors(parsed.error));
+      return;
+    }
+    // Only these three fields are read, so a role or isActive sent in
+    // the body never reaches the model.
+    const { name, email, password } = parsed.data;
 
     if (await Engineer.findOne({ email })) {
       res.status(409).json({
@@ -39,11 +33,13 @@ authRouter.post(
 
 authRouter.post(
   "/login",
-  async (
-    req: Request<unknown, unknown, LoginBody>,
-    res: Response,
-  ) => {
-    const { email, password } = req.body;
+  async (req: Request, res: Response) => {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json(validationErrors(parsed.error));
+      return;
+    }
+    const { email, password } = parsed.data;
 
     /**
      * Explicitly select the password field for verification since it is hidden by default.
