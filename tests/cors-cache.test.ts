@@ -14,7 +14,7 @@ const { OLD, NEW } = vi.hoisted(() => {
 vi.mock("../src/config/db", () => ({ connectDB: async () => {} }));
 
 import { app } from "../src/app";
-import { parseOrigins } from "../src/config/cors";
+import { parseOrigins, allowedOrigins, PREVIEW_ORIGIN_PATTERNS } from "../src/config/cors";
 import { Workspace } from "../src/models/Workspace";
 import { WORKSPACES } from "../src/data/workspaces";
 import { fakeCollection } from "./helpers/fakeDb";
@@ -162,5 +162,53 @@ describe("parseOrigins (how CORS_ORIGIN is read)", () => {
     // nobody can look at it to see why.
     const [origin] = parseOrigins(`${NEW}/`);
     expect(origin).not.toBe(NEW);
+  });
+});
+
+describe("CORS: the frontend's Vercel preview deployments", () => {
+  // Real URL shapes, taken from the Vercel bot's comments on this
+  // account's pull requests.
+  const allowed = [
+    // one URL per push: <project>-<9-character hash>-<team>
+    "https://cloudops-portal-a1b2c3d4e-papap7s-projects.vercel.app",
+    // the branch URL the PR comment links to
+    "https://cloudops-portal-git-fix-input-validation-papap7s-projects.vercel.app",
+    // previews made before the Vercel project was renamed
+    "https://itelect4-project-paulot-git-fix-demo-polish-papap7s-projects.vercel.app",
+  ];
+
+  const refused = [
+    // the other team's site that took cloudops-portal.vercel.app
+    "https://cloudops-portal.vercel.app",
+    // the right project name under a different team
+    "https://cloudops-portal-git-main-someone-else.vercel.app",
+    // a different project under this team (the backend itself)
+    "https://itelect4-backend-git-gt4-part1-papap7s-projects.vercel.app",
+    // http, not https
+    "http://cloudops-portal-a1b2c3d4e-papap7s-projects.vercel.app",
+    // a preview URL followed by someone else's domain
+    "https://cloudops-portal-a1b2c3d4e-papap7s-projects.vercel.app.evil.example",
+    // a hash that is not 9 characters
+    "https://cloudops-portal-a1b2c-papap7s-projects.vercel.app",
+  ];
+
+  it.each(allowed)("allows %s", async (origin) => {
+    const res = await request(app).get("/api/workspaces").set("Origin", origin);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["access-control-allow-origin"]).toBe(origin);
+    // Previews get the same no-store answer as production.
+    expect(res.headers["cache-control"]).toBe("no-store");
+  });
+
+  it.each(refused)("refuses %s", async (origin) => {
+    const res = await request(app).get("/api/workspaces").set("Origin", origin);
+
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("matches with the patterns alone, so a replaced CORS_ORIGIN cannot drop previews again", () => {
+    expect(allowedOrigins("")).toEqual(PREVIEW_ORIGIN_PATTERNS);
+    expect(allowedOrigins(`${OLD},${NEW}`).slice(0, 2)).toEqual([OLD, NEW]);
   });
 });
