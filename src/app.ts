@@ -32,6 +32,29 @@ const ALLOWED_ORIGINS = parseOrigins(process.env.CORS_ORIGIN);
 
 app.use(cors({ origin: ALLOWED_ORIGINS }));
 
+// ===== Two frontend domains, one browser cache ======================
+// cors() above answers each origin with its own Access-Control-Allow-
+// Origin and adds Vary: Origin. That was not enough once the frontend
+// had two domains. The browser stored the old domain's response, then
+// on the new domain revalidated that stored copy with If-None-Match.
+// The body had not changed, so Express answered 304 Not Modified with
+// no body -- and the browser rebuilt the response from its stored copy,
+// Access-Control-Allow-Origin for the OLD domain included. CORS failed.
+//
+// Two lines take that path away instead of depending on how a browser
+// or Vercel's edge merges a 304 into a stored response:
+//   - no ETag, so Express never answers 304;
+//   - Cache-Control: no-store, so the browser keeps no copy to reuse.
+// This API's responses are small, per-user or changing JSON; there was
+// never a copy worth keeping. no-store is also what you want on any
+// response that was sent because of an Authorization header.
+app.set("etag", false);
+
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
+
 // Reads a JSON request body and puts it on req.body. Without this
 // line req.body is undefined, and `const { email } = req.body` throws.
 app.use(express.json());
