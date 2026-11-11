@@ -6,6 +6,7 @@ import express, {
 import cors from "cors";
 import mongoose from "mongoose";
 import { connectDB } from "./config/db";
+import { parseOrigins } from "./config/cors";
 import { authRouter } from "./routes/auth";
 import { provisionRequestRouter } from "./routes/provisionRequest";
 import { workspaceRouter } from "./routes/workspace";
@@ -26,11 +27,8 @@ export const app = express();
 
 // One environment variable, comma-separated, so the list is different
 // on your laptop and on Vercel without the code knowing which it is.
-// Origins have no trailing slash: http://localhost:5173 not .../
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN ?? "http://localhost:5173")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter((origin) => origin !== "");
+// The parsing lives in config/cors.ts so it can be tested on its own.
+const ALLOWED_ORIGINS = parseOrigins(process.env.CORS_ORIGIN);
 
 app.use(cors({ origin: ALLOWED_ORIGINS }));
 
