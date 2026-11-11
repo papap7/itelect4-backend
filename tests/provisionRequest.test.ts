@@ -6,6 +6,8 @@ vi.mock("../src/config/db", () => ({ connectDB: async () => {} }));
 
 import { app } from "../src/app";
 import { ProvisionRequest } from "../src/models/ProvisionRequest";
+import { Workspace } from "../src/models/Workspace";
+import { WORKSPACES } from "../src/data/workspaces";
 import { ProvisionStatus } from "../src/types/index";
 import { fakeCollection, type FakeCollection } from "./helpers/fakeDb";
 import { bearer, newUserId } from "./helpers/auth";
@@ -16,7 +18,11 @@ let ben: string;
 
 const VALID = { workspaceId: 103, resourceType: "t3.medium EC2 instance" };
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Creating a request now checks that its workspace exists, so the six
+  // reference workspaces have to be "in the database" too.
+  fakeCollection(Workspace);
+  await Workspace.create(WORKSPACES);
   db = fakeCollection(ProvisionRequest);
   ana = newUserId();
   ben = newUserId();
@@ -72,6 +78,24 @@ describe("POST /api/provision-requests", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.engineerId).toBe(ana);
+  });
+
+  it("ignores a requestedAt in the body: the server sets the time", async () => {
+    const res = await createAs(ana, { ...VALID, requestedAt: "2020-01-01T00:00:00.000Z" });
+
+    expect(res.status).toBe(201);
+    expect(new Date(res.body.requestedAt).getFullYear()).not.toBe(2020);
+  });
+
+  it("answers 400 for a workspace that does not exist, and saves nothing", async () => {
+    const res = await createAs(ana, { ...VALID, workspaceId: 999 });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      message: "Validation failed",
+      errors: ["No workspace with id 999"],
+    });
+    expect(db.docs).toHaveLength(0);
   });
 
   it("answers 400 for a workspaceId below 100", async () => {
@@ -214,6 +238,61 @@ describe("PATCH /api/provision-requests/:id", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.errors).toEqual(["9 is not a valid ProvisionStatus"]);
+  });
+
+  it("ignores engineerId: a request cannot be moved into another engineer's list", async () => {
+    const { body: created } = await createAs(ana);
+
+    const res = await request(app)
+      .patch(`/api/provision-requests/${created.id}`)
+      .set("Authorization", bearer(ana))
+      .send({ engineerId: ben, status: ProvisionStatus.Provisioning });
+
+    expect(res.status).toBe(200);
+    expect(res.body.engineerId).toBe(ana);
+    expect(String(db.docs[0].engineerId)).toBe(ana);
+
+    const bensList = await request(app)
+      .get("/api/provision-requests")
+      .set("Authorization", bearer(ben));
+    expect(bensList.body).toEqual([]);
+  });
+
+  it("ignores requestedAt: the original time is kept", async () => {
+    const { body: created } = await createAs(ana);
+
+    const res = await request(app)
+      .patch(`/api/provision-requests/${created.id}`)
+      .set("Authorization", bearer(ana))
+      .send({ requestedAt: "2020-01-01T00:00:00.000Z" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.requestedAt).toBe(created.requestedAt);
+  });
+
+  it("moves a request to another workspace that exists", async () => {
+    const { body: created } = await createAs(ana);
+
+    const res = await request(app)
+      .patch(`/api/provision-requests/${created.id}`)
+      .set("Authorization", bearer(ana))
+      .send({ workspaceId: 104 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.workspaceId).toBe(104);
+  });
+
+  it("answers 400 for a workspace that does not exist and leaves the request unchanged", async () => {
+    const { body: created } = await createAs(ana);
+
+    const res = await request(app)
+      .patch(`/api/provision-requests/${created.id}`)
+      .set("Authorization", bearer(ana))
+      .send({ workspaceId: 999 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toEqual(["No workspace with id 999"]);
+    expect(db.docs[0].workspaceId).toBe(VALID.workspaceId);
   });
 
   it("answers 404 for someone else's request and leaves it unchanged", async () => {
